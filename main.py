@@ -2,26 +2,25 @@ import threading
 import queue
 import time
 import random
+printPad =  ' ' * 30
 #############################################################################
 
 def workerFunction( *args ):
     myThreadNumber = args[0]
-    x  = random.uniform( .1, 3.0 )
-    printPad =  ' ' * 30
-    print(' {} Thr{}. Wrk: {:5.2f} sec.'.format(printPad,myThreadNumber,x))
+    x  = random.uniform( .1, 1.0 )
     time.sleep( x )
+    print(' {} Thr{}. Wrk: {:5.2f} sec.'.format(printPad,myThreadNumber,x))
     return 0
 #############################################################################
 
 def aThreadWhileOneLoop( *args ):
     myThreadNumber = args[0]
     myCommandQ     = args[1][myThreadNumber]['cq']
-    printPad =  ' ' * 30
      
     while(1):
 
         try:                            # Look for a command. 
-            command = myCommandQ.get( block = True, timeout = .1 )
+            command = myCommandQ.get( block = False, timeout = .1 )
         except queue.Empty:
             command = ''
         else:
@@ -36,7 +35,7 @@ def aThreadWhileOneLoop( *args ):
             #print('{:>81}'.format(myStr), flush = True)
 
             myRespondToQ = args[1][command[1]]['rq']
-            myRespondToQ.put( ' Thr{}. Rsp To cmd {}.'.\
+            myRespondToQ.put( ' Thr{}. put rsp to cmd {}.'.\
                 format(myThreadNumber, command[2]) )
     return 0
 #############################################################################
@@ -91,23 +90,23 @@ if __name__ == '__main__':
     # Send commands to the threads.  Keep track of how many 
     # cmds are sent to know how many responses to expect.
     print(' Main: Sending cmds to Threads.\n')
-    numCmdsToSend = 20
+    numCmdsToSend = 10
     for ii in range(numCmdsToSend):
 
+        # Send a cmd to a random thread.
         wrkThrd2SendTo = random.randint( 1, len( tLst ) )
         sendResponseTo = mainThreadIdx
-        # Note the message format.  Threads know this apriori.
         toSend         = [ wrkThrd2SendTo, sendResponseTo, ii ]
-        print(' Main. Put: {}.'.format(toSend), flush = True)
-        qDict[ wrkThrd2SendTo ][ 'cq' ].put( toSend )
+        print(' Main. Put Cmd: {}.'.format(toSend), flush = True)
+        qDict[ wrkThrd2SendTo ]['cq'].put( toSend )
 
-        x = random.uniform( .1, .3 )
+        # sleep a bit before sending the next cmd.
+        x = random.uniform( .01, .1 )
         time.sleep( x )
 
     # Wait for all the threads to send all their responses.
     while qDict[0]['rq'].qsize() < numCmdsToSend:
-        print(' Main. Exp/Rcvd Ress = {}/{}.'.format(numCmdsToSend, qDict[0]['rq'].qsize()), flush = True)
-        time.sleep(.5)
+        print(' Main. Exp/Rcvd Resps = {}/{}.'.format(numCmdsToSend, qDict[0]['rq'].qsize()), flush = True)
     print(' Main. Exp/Rcvd Rsps = {}/{}.'.format(numCmdsToSend, qDict[0]['rq'].qsize()), flush = True)
 
     # Kill all the threads because I hate them.
