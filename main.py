@@ -5,39 +5,39 @@ import random
 #############################################################################
 
 def workerFunction( *args ):
+    myThreadNumber = args[0]
     x  = random.uniform( .1, 3.0 )
+    printPad =  ' ' * 30
+    print(' {} Thr{}. Wrk: {:5.2f} sec.'.format(printPad,myThreadNumber,x))
     time.sleep( x )
     return 0
 #############################################################################
 
-def workerThread( *args ):
+def aThreadWhileOneLoop( *args ):
     myThreadNumber = args[0]
     myCommandQ     = args[1][myThreadNumber]['cq']
-    myMessageQ     = args[1][myThreadNumber]['mq']
+    printPad =  ' ' * 30
      
     while(1):
-
-        try:                            # Look for a message.
-            message = myMessageQ.get( block = True, timeout = .1 )
-        except queue.Empty:
-            message = ''
-        else:
-            print(' Thread-{}. Getting: {}.'.format(myThreadNumber, message))
 
         try:                            # Look for a command. 
             command = myCommandQ.get( block = True, timeout = .1 )
         except queue.Empty:
             command = ''
         else:
-            print( ' Thread-{}. Getting: {}.'.format(myThreadNumber,command))
+            print(' {} Thr{}. Get: {}.'.format(printPad, myThreadNumber,command), flush = True)
 
         if command == 'q':              # Terminate command received?
             break
         elif command != '':             # Some other command received?
-            response = workerFunction() # If so, spend time doing work.
-            myRespondToQ = args[1][command[2]]['rq']
-            myRespondToQ.put( ' Thread-{}. Rsp To cmd {}.'.\
-                format(myThreadNumber, command[3]) )
+            response = workerFunction(myThreadNumber) # If so, spend time doing work.
+
+            #myStr = ' Thread-{}. Putting: {}.'.format(myThreadNumber, message)
+            #print('{:>81}'.format(myStr), flush = True)
+
+            myRespondToQ = args[1][command[1]]['rq']
+            myRespondToQ.put( ' Thr{}. Rsp To cmd {}.'.\
+                format(myThreadNumber, command[2]) )
     return 0
 #############################################################################
 
@@ -55,23 +55,21 @@ if __name__ == '__main__':
     # Create a list of functions. The first one is just kind of a Dummy to
     # make sure that the 'main' thread as well as all the 'worker' threads,
     # get queues (command, response, message) allocated for it.
-    threadFunctionLst = [mainThread0] +numThreads*[workerThread]
+    threadFunctionLst = [mainThread0] + numThreads * [aThreadWhileOneLoop]
 
     # Create a dictionary. The keys are integers 0 to len(threadFunctionLst)-1.
-    # The values are a sub-dictionary of three Qs, command, response, message.
+    # The values are a sub-dictionary of two Qs, command, response.
     # For example:
     # qDict[1][cq]: Where Thrd1 looks for cmds sent to it by other thrds (or main).
     # qDict[1][rq]: Where Thrd1 looks for responses to cmds it sent to other thrds.
-    # qDict[1][mq]: Where Thrd1 looks for msgs sent to it by other thrds (or main).
     #               Note: Commands generate Responses ... Messages don't.
-    print('\n     Main. Creating Queues.')
+    print('\n Main. Creating Queues.')
     for t in range( len( threadFunctionLst ) ):
         qDict[t] = { 'cq': queue.Queue(),
-                     'rq': queue.Queue(),
-                     'mq': queue.Queue() }
+                     'rq': queue.Queue()}
 
     # Create all the threads.
-    print('     Main. Creating worker threads.' )
+    print(' Main. Creating worker threads.' )
     for t in range( 1,len( threadFunctionLst ) ): # <-- 1 causes Dummy to be skipped.
         tLst.append( threading.Thread( group  = None, 
                                        target = threadFunctionLst[t], 
@@ -86,45 +84,39 @@ if __name__ == '__main__':
                                        daemon = None ) )
 
     # Start all the threads.
-    print('     Main. Starting worker threads.\n')
+    print(' Main. Starting worker threads.')
     for t in tLst:
         t.start()
 
-    # Send commands/messages to the threads.  Keep track of how many 
+    # Send commands to the threads.  Keep track of how many 
     # cmds are sent to know how many responses to expect.
-    print(' Main: Sending cmds/msgs (random) to 1 of 3 Threads (random).')
-    numResponsesExpected = 0
-    for ii in range(20):
+    print(' Main: Sending cmds to Threads.\n')
+    numCmdsToSend = 20
+    for ii in range(numCmdsToSend):
 
-        cmdOrMsg       = 'cq' if random.randint( 0, 1 ) else 'mq'
         wrkThrd2SendTo = random.randint( 1, len( tLst ) )
         sendResponseTo = mainThreadIdx
         # Note the message format.  Threads know this apriori.
-        toSend         = [ cmdOrMsg, wrkThrd2SendTo, sendResponseTo, ii ]
-        print( '     Main. Putting: {}.'.format(toSend))
-        qDict[ wrkThrd2SendTo ][ cmdOrMsg ].put( toSend )
+        toSend         = [ wrkThrd2SendTo, sendResponseTo, ii ]
+        print(' Main. Put: {}.'.format(toSend), flush = True)
+        qDict[ wrkThrd2SendTo ][ 'cq' ].put( toSend )
 
         x = random.uniform( .1, .3 )
         time.sleep( x )
 
-        if cmdOrMsg == 'cq':
-            numResponsesExpected += 1
-
     # Wait for all the threads to send all their responses.
-    while qDict[0]['rq'].qsize() < numResponsesExpected:
-        print('     Main. Expected/Received Responses = {}/{}.'.\
-            format(numResponsesExpected, qDict[0]['rq'].qsize() ))
+    while qDict[0]['rq'].qsize() < numCmdsToSend:
+        print(' Main. Exp/Rcvd Ress = {}/{}.'.format(numCmdsToSend, qDict[0]['rq'].qsize()), flush = True)
         time.sleep(.5)
-    print('     Main. Expected/Received Responses = {}/{}.'.\
-        format(numResponsesExpected, qDict[0]['rq'].qsize() ))
+    print(' Main. Exp/Rcvd Rsps = {}/{}.'.format(numCmdsToSend, qDict[0]['rq'].qsize()), flush = True)
 
     # Kill all the threads because I hate them.
-    print( '\n     Main. Killing all worker threads.' )
+    print( '\n Main. Killing all worker threads.' )
     for t in range( 1,len( threadFunctionLst ) ):
         qDict[ t ][ 'cq' ].put( 'q' )
 
-    print( '\n     Main. Printing all collected responses.' )
-    for ii in range(numResponsesExpected):
+    print( '\n Main. Printing all collected responses.' )
+    for ii in range(numCmdsToSend):
         response = qDict[0]['rq'].get( block = True, timeout = .2 )
         print(response)
 #############################################################################
