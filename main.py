@@ -2,15 +2,15 @@ import threading
 import queue
 import time
 import random
-printPad =  ' ' * 30
+printPad =  ' ' * 50
 #############################################################################
 
 def workerFunction( *args ):
     myThreadNumber = args[0]
-    x  = random.uniform( .1, 1.0 )
+    x  = random.uniform( .01, 1.0 )
     time.sleep( x )
     print(' {} Thr{}. Wrk: {:5.2f} sec.'.format(printPad,myThreadNumber,x))
-    return 0
+    return x
 #############################################################################
 
 def aThreadWhileOneLoop( *args ):
@@ -19,24 +19,26 @@ def aThreadWhileOneLoop( *args ):
      
     while(1):
 
+        x  = random.uniform( .01, 1.0 )
+        time.sleep( x )
+
         try:                            # Look for a command. 
-            command = myCommandQ.get( block = False, timeout = .1 )
+            #command = myCommandQ.get( block = True, timeout = .1 )
+            command = myCommandQ.get( block = False )
         except queue.Empty:
-            command = ''
+            command = None
         else:
             print(' {} Thr{}. Get: {}.'.format(printPad, myThreadNumber,command), flush = True)
 
         if command == 'q':              # Terminate command received?
             break
-        elif command != '':             # Some other command received?
-            response = workerFunction(myThreadNumber) # If so, spend time doing work.
-
-            #myStr = ' Thread-{}. Putting: {}.'.format(myThreadNumber, message)
-            #print('{:>81}'.format(myStr), flush = True)
-
+        elif command != None:           # Some other command received?
+            workerRsp = workerFunction(myThreadNumber) # If so, spend time doing work.
+            cmdRsp    = ' Thr{}. Put: Rsp={:5.2f} to cmd {}'.format(myThreadNumber, workerRsp, command[2])
+            print( '{} {}.'.format(printPad,cmdRsp))
             myRespondToQ = args[1][command[1]]['rq']
-            myRespondToQ.put( ' Thr{}. put rsp to cmd {}.'.\
-                format(myThreadNumber, command[2]) )
+            myRespondToQ.put( cmdRsp )
+
     return 0
 #############################################################################
 
@@ -91,32 +93,42 @@ if __name__ == '__main__':
     # cmds are sent to know how many responses to expect.
     print(' Main: Sending cmds to Threads.\n')
     numCmdsToSend = 10
+    numRspRcvd = 0
     for ii in range(numCmdsToSend):
 
         # Send a cmd to a random thread.
         wrkThrd2SendTo = random.randint( 1, len( tLst ) )
-        sendResponseTo = mainThreadIdx
-        toSend         = [ wrkThrd2SendTo, sendResponseTo, ii ]
+        #wrkThrd2SendTo = 4
+        toSend = [ wrkThrd2SendTo, mainThreadIdx, ii ]
         print(' Main. Put Cmd: {}.'.format(toSend), flush = True)
         qDict[ wrkThrd2SendTo ]['cq'].put( toSend )
 
+        # Check for any responses.
+        try:
+            cmdRsp = qDict[mainThreadIdx]['rq'].get(block = False)
+        except queue.Empty:
+            cmdRsp = None
+        else:
+            print(' Main. Get: {}.'.format(cmdRsp), flush = True)
+            numRspRcvd += 1
+
         # sleep a bit before sending the next cmd.
-        x = random.uniform( .01, .1 )
+        x = random.uniform( .01, 1 )
         time.sleep( x )
 
     # Wait for all the threads to send all their responses.
-    while qDict[0]['rq'].qsize() < numCmdsToSend:
-        print(' Main. Exp/Rcvd Resps = {}/{}.'.format(numCmdsToSend, qDict[0]['rq'].qsize()), flush = True)
-    print(' Main. Exp/Rcvd Rsps = {}/{}.'.format(numCmdsToSend, qDict[0]['rq'].qsize()), flush = True)
+    while numRspRcvd < numCmdsToSend:
+        try:
+            cmdRsp = qDict[mainThreadIdx]['rq'].get( block = False )
+        except queue.Empty:
+            cmdRsp = None
+        else:
+            print(' Main. Get: {}.'.format(cmdRsp), flush = True)
+            numRspRcvd += 1
 
     # Kill all the threads because I hate them.
     print( '\n Main. Killing all worker threads.' )
     for t in range( 1,len( threadFunctionLst ) ):
         qDict[ t ][ 'cq' ].put( 'q' )
-
-    print( '\n Main. Printing all collected responses.' )
-    for ii in range(numCmdsToSend):
-        response = qDict[0]['rq'].get( block = True, timeout = .2 )
-        print(response)
 #############################################################################
 
