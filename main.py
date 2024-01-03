@@ -9,14 +9,15 @@ def workerFunction( *args ):
     myThreadName = args[0]
     x  = random.uniform( .01, 1.0 )
     time.sleep( x )
-    print(' {} {}. Wrk: {:5.2f} sec.'.format(printPad,myThreadName,x))
+    #print(' {} {}. Wrk: {:5.2f} sec.'.format(printPad,myThreadName,x))
     return x
 #############################################################################
 
 def aThreadWhileOneLoop( *args ):
-    myThreadNumber = args[0]
-    myCommandQ     = args[1][myThreadNumber]['cq']
-    myThreadName   = threading.current_thread().name
+    myThrNum     = args[0]
+    qDict        = args[1]
+    myCommandQ   = qDict[myThrNum]['cq']
+    myThreadName = threading.current_thread().name
      
     while(1):
 
@@ -32,11 +33,15 @@ def aThreadWhileOneLoop( *args ):
         if command['cmd'] == 'quit':  # Terminate command received?
             break
         elif command['cmd'] == 'wrk': # Some other command received?
-            workerRsp = workerFunction(myThreadName) # If so, spend time doing work.
-            cmdRsp    = ' {}. Put: Rsp={:5.2f} to cmd {}'.format(myThreadName, workerRsp, command['seqNum'])
-            print( '{} {}.'.format(printPad,cmdRsp), flush = True)
-            myRespondToQ = args[1][command['cmdFrom']]['rq']
-            myRespondToQ.put( cmdRsp )
+
+            workerRsp = '{:4.2f}'.format(workerFunction(myThreadName)) # If so, spend time doing work.
+
+            toSend = { 'rspTo': command['cmdFrom'], 'rspFrom': myThrNum, 'rsp': workerRsp, 'seqNum': command['seqNum'] }
+
+            print( ' {} {}. Put: {}.'.format(printPad,myThreadName, toSend), flush = True)
+
+            myRespondToQ = qDict[command['cmdFrom']]['rq']
+            myRespondToQ.put( toSend )
 
     return 0
 #############################################################################
@@ -91,7 +96,7 @@ if __name__ == '__main__':
     # Send commands to the threads.  Keep track of how many 
     # cmds are sent to know how many responses to expect.
     print(' Main: Sending cmds to Threads.\n')
-    numCmdsToSend = 15
+    numCmdsToSend = 10
     numRspRcvd    = 0
     seqNum = 0
     for ii in range(numCmdsToSend):
@@ -100,7 +105,7 @@ if __name__ == '__main__':
         wrkThrd2SendTo = random.randint( 1, len( tLst ) )
         toSend = { 'cmdTo': wrkThrd2SendTo, 'cmdFrom': mainThreadIdx, 'cmd': 'wrk', 'seqNum':seqNum }
         seqNum += 1
-        print(' Main. Put Cmd: {}.'.format(toSend), flush = True)
+        print(' Main. Put: {}.'.format(toSend), flush = True)
         qDict[ wrkThrd2SendTo ]['cq'].put( toSend )
 
         # Check for any responses.
