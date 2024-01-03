@@ -2,41 +2,40 @@ import threading
 import queue
 import time
 import random
-printPad =  ' ' * 50
+printPad =  ' ' * 70
 #############################################################################
 
 def workerFunction( *args ):
-    myThreadNumber = args[0]
+    myThreadName = args[0]
     x  = random.uniform( .01, 1.0 )
     time.sleep( x )
-    print(' {} Thr{}. Wrk: {:5.2f} sec.'.format(printPad,myThreadNumber,x))
+    print(' {} {}. Wrk: {:5.2f} sec.'.format(printPad,myThreadName,x))
     return x
 #############################################################################
 
 def aThreadWhileOneLoop( *args ):
     myThreadNumber = args[0]
     myCommandQ     = args[1][myThreadNumber]['cq']
+    myThreadName   = threading.current_thread().name
      
     while(1):
 
         x  = random.uniform( .01, 1.0 )
         time.sleep( x )
 
-        try:                            # Look for a command. 
-            #command = myCommandQ.get( block = True, timeout = .1 )
+        try:                          # Look for a command. 
             command = myCommandQ.get( block = False )
         except queue.Empty:
-            command = None
-        else:
-            print(' {} Thr{}. Get: {}.'.format(printPad, myThreadNumber,command), flush = True)
+            continue
 
-        if command == 'q':              # Terminate command received?
+        print(' {} {}. Get: {}.'.format(printPad, myThreadName, command), flush = True)
+        if command['cmd'] == 'quit':  # Terminate command received?
             break
-        elif command != None:           # Some other command received?
-            workerRsp = workerFunction(myThreadNumber) # If so, spend time doing work.
-            cmdRsp    = ' Thr{}. Put: Rsp={:5.2f} to cmd {}'.format(myThreadNumber, workerRsp, command[2])
-            print( '{} {}.'.format(printPad,cmdRsp))
-            myRespondToQ = args[1][command[1]]['rq']
+        elif command['cmd'] == 'wrk': # Some other command received?
+            workerRsp = workerFunction(myThreadName) # If so, spend time doing work.
+            cmdRsp    = ' {}. Put: Rsp={:5.2f} to cmd {}'.format(myThreadName, workerRsp, command['seqNum'])
+            print( '{} {}.'.format(printPad,cmdRsp), flush = True)
+            myRespondToQ = args[1][command['cmdFrom']]['rq']
             myRespondToQ.put( cmdRsp )
 
     return 0
@@ -74,7 +73,7 @@ if __name__ == '__main__':
     for t in range( 1,len( threadFunctionLst ) ): # <-- 1 causes Dummy to be skipped.
         tLst.append( threading.Thread( group  = None, 
                                        target = threadFunctionLst[t], 
-                                       name   = None,
+                                       name   = 'Thr{}'.format(t),
 
                                        # t = thread number. A given thread uses
                                        # this parameter to know its index into 
@@ -92,14 +91,15 @@ if __name__ == '__main__':
     # Send commands to the threads.  Keep track of how many 
     # cmds are sent to know how many responses to expect.
     print(' Main: Sending cmds to Threads.\n')
-    numCmdsToSend = 10
-    numRspRcvd = 0
+    numCmdsToSend = 15
+    numRspRcvd    = 0
+    seqNum = 0
     for ii in range(numCmdsToSend):
 
         # Send a cmd to a random thread.
         wrkThrd2SendTo = random.randint( 1, len( tLst ) )
-        #wrkThrd2SendTo = 4
-        toSend = [ wrkThrd2SendTo, mainThreadIdx, ii ]
+        toSend = { 'cmdTo': wrkThrd2SendTo, 'cmdFrom': mainThreadIdx, 'cmd': 'wrk', 'seqNum':seqNum }
+        seqNum += 1
         print(' Main. Put Cmd: {}.'.format(toSend), flush = True)
         qDict[ wrkThrd2SendTo ]['cq'].put( toSend )
 
@@ -113,13 +113,14 @@ if __name__ == '__main__':
             numRspRcvd += 1
 
         # sleep a bit before sending the next cmd.
-        x = random.uniform( .01, 1 )
+        x = random.uniform( .01, 1.0 )
         time.sleep( x )
 
     # Wait for all the threads to send all their responses.
+    print(' Main: Waiting for all responses.')
     while numRspRcvd < numCmdsToSend:
         try:
-            cmdRsp = qDict[mainThreadIdx]['rq'].get( block = False )
+            cmdRsp = qDict[mainThreadIdx]['rq'].get( block = False )       
         except queue.Empty:
             cmdRsp = None
         else:
@@ -129,6 +130,8 @@ if __name__ == '__main__':
     # Kill all the threads because I hate them.
     print( '\n Main. Killing all worker threads.' )
     for t in range( 1,len( threadFunctionLst ) ):
-        qDict[ t ][ 'cq' ].put( 'q' )
+        toSend = { 'cmdTo': wrkThrd2SendTo, 'cmdFrom': mainThreadIdx, 'cmd': 'quit', 'seqNum':seqNum }
+        seqNum += 1
+        qDict[ t ][ 'cq' ].put( toSend )
 #############################################################################
 
