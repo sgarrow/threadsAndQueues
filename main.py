@@ -46,9 +46,9 @@ def aThreadWhileOneLoop(*args):
         try:                      # Look for a command. 
             cmd = myCommandQ.get(block = False)
         except queue.Empty:
-            continue
-
-        print(' {} {}. Get: {}.'.format(pad, myThrNme, cmd), flush = True)
+            cmd = { 'cmd': None }
+        else:
+            print(' {} {}. Get: {}.'.format(pad, myThrNme, cmd), flush = True)
 
         if cmd['cmd'] == 'quit':  # Terminate command received?
             break
@@ -70,6 +70,7 @@ def aThreadWhileOneLoop(*args):
 
             # Send a cmd to a random thread.
             wrkThrd2SendTo = random.randint(1, numThreads)
+            #wrkThrd2SendTo = myThrNum
             secondCmd = 'cmdToDoWrk'
             toSend = { 'cmdTo': wrkThrd2SendTo, 'cmdFrom': myThrNum, 
                        'cmd': secondCmd, 'seqNum':seqNum }
@@ -78,10 +79,10 @@ def aThreadWhileOneLoop(*args):
             qDict[wrkThrd2SendTo]['cq'].put(toSend)
 
             ###  Send a response back to main ... then proceed. 
-            wrkRsp = '{:4.2f}'.format(workFunc1(myThrNme)) 
+            wrkRsp = '{:4.2f}'.format(workFunc1(myThrNme))
 
             toSend = { 'rspTo': cmd['cmdFrom'], 'rspFrom': myThrNum, 
-                       'rsp':   wrkRsp, 'seqNum': cmd['seqNum'] }
+                       'rsp':   'sent', 'seqNum': cmd['seqNum'] }
 
             print(' {} {}. Put: {}.'.format(pad,myThrNme,toSend),flush=True)
 
