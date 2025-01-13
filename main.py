@@ -134,7 +134,8 @@ if __name__ == '__main__':
     tLst          = [] # List of functions to be passed to 'create thread'.
     mainThreadIdx = 0  # Threads numbered 1,2,... and 0 is reserved for main.
     #########################################################################
-
+    ver = ' v1.0.0 - 12-Jan-2025'
+    print(ver)
     print('\n Main. Creating message queues for \'main\' ands all threads.')
     # e.g. qDict[1][cq]: Where Thrd1 looks for cmds sent to it.
     #      qDict[1][rq]: Where Thrd1 looks for responses to cmds it.
